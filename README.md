@@ -8,9 +8,9 @@
 
 | STT | Họ và Tên | MSSV | Email | Vai trò |
 |-----|-----------|------|-------|---------|
-| 1 | [Vũ Nguyễn Duy Anh] | [22810310266] | [dauyanhsadg@gmail.com] | Nhóm trưởng |
-| 2 | [Trịnh Thị Thu Huyền] | [22810310234] | [email2@example.com] | Thành viên |
-| 3 | [Nguyễn Nhật Quang] | [22810310087] | [email3@example.com] | Thành viên |
+| 1 | Vũ Nguyễn Duy Anh | 22810310266 | duyanhsadg@gmail.com | Nhóm trưởng |
+| 2 | Trịnh Thị Thu Huyền | 22810310234|  | Thành viên |
+| 3 | Nguyễn Nhật Quang | 22810310087 |  | Thành viên |
 
 ---
 
@@ -18,9 +18,9 @@
 
 | Thành viên | Công việc phụ trách | Tiến độ |
 |------------|---------------------|---------|
-| [Nhật Quang] | - Xây dựng module xác thực JWT<br>-Nghiên cứu RSA-PSS<br>- Tích hợp database PostgreSQL | ✅ Hoàn thành |
-| [Duy Anh] | - Thiết kế kiến trúc hệ thống<br>- Nghiên cứu lỗ hổng RSA PKCS#1 v1.5<br>- Xây dựng demo tấn công Bleichenbacher<br>- Viết script demo so sánh | ✅ Hoàn thành |
-| [Thu Huyền] | - Xây dựng API FastAPI<br>- Thiết kế database schema<br>-Nghiên cứu Ed22519<br>- Xây dựng module quản lý khóa | ✅ Hoàn thành |
+| Nhật Quang | - Xây dựng module xác thực JWT<br>-Nghiên cứu RSA-PSS<br>- Tích hợp database PostgreSQL | ✅ Hoàn thành |
+| Duy Anh | - Thiết kế kiến trúc hệ thống<br>- Nghiên cứu lỗ hổng RSA PKCS#1 v1.5<br>- Xây dựng demo tấn công Bleichenbacher<br>- Viết script demo so sánh | ✅ Hoàn thành |
+| Thu Huyền | - Xây dựng API FastAPI<br>- Thiết kế database schema<br>-Nghiên cứu Ed22519<br>- Xây dựng module quản lý khóa | ✅ Hoàn thành |
 
 ---
 
@@ -58,14 +58,31 @@ docker compose ps
 
 Kết quả mong đợi: tất cả services ở trạng thái `running`.
 
-![Docker Services Running](./docs/images/docker-services.png)
-> *Hình 1: Các services đang chạy*
+<img width="1717" height="457" alt="image" src="https://github.com/user-attachments/assets/0dd4f627-9ecf-4b28-8f58-85e9a9d5c9f1" />
+> *Hình 2.1: Các services đang chạy*
 
 ---
 
 ### 3. Demo tấn công RSA PKCS#1 v1.5
+#### 3.1. request khai thác lỗ hổng padding 
 
-#### 3.1. Chạy script so sánh Secure vs Vulnerable
+<img width="1567" height="592" alt="image" src="https://github.com/user-attachments/assets/0d421333-0e22-4efe-9219-624e4a7a00a1" />
+
+> *Hình 3.1: Kết quả phát hiện RSA PKCS#1 v1.5 Padding Oracle*
+
+#### 3.2. mô phỏng tấn cổng sử dung cube root 3
+
+<img width="794" height="408" alt="image" src="https://github.com/user-attachments/assets/46516e61-1f51-4d7f-936c-d66dfa822764" />
+
+>*Hình 3.2 kết quả tấn công thành công với e=3*
+
+-> request đã được gửi thành công đến server
+
+<img width="1557" height="612" alt="image" src="https://github.com/user-attachments/assets/5172cce1-7cde-4e35-8069-6ff67d61e58a" />
+
+>*Hình 3.4 request detail*
+
+#### 3.3. Chạy script so sánh Secure vs Vulnerable
 
 ```bash
 cd scripts
@@ -78,78 +95,49 @@ Script này sẽ demo:
 - ✅ Chữ ký giả mạo bị từ chối bởi phiên bản **secure**
 - ❌ Chữ ký giả mạo được chấp nhận bởi phiên bản **vulnerable**
 
-![RSA Attack Demo](./docs/images/rsa-attack-demo.png)
-> *Hình 2: Kết quả demo tấn công RSA PKCS#1 v1.5*
+<img width="786" height="496" alt="image" src="https://github.com/user-attachments/assets/913f95a6-3798-4731-ad9d-fcd3c67be476" />
 
-#### 3.2. Giải thích kết quả
+> *Hình 3.4: Kết quả demo tấn công RSA PKCS#1 v1.5*
+
+#### Giải thích kết quả
 
 | Thuật toán | Chữ ký hợp lệ | Chữ ký giả mạo |
 |------------|---------------|----------------|
 | `rsa-pkcs1v15` (Secure) | ✅ Accepted | ❌ Rejected |
 | `rsa-pkcs1v15-vulnerable` | ✅ Accepted | ⚠️ **Accepted (LỖ HỔNG!)** |
 
----
-
-### 4. Xác thực Admin với JWT
-
-#### 4.1. Đăng nhập lấy token
+#### 3.4 Chạy script ghi event log sử dụng RSA-PSS
 
 ```bash
-python scripts/admin_auth.py
+python log_rsa_pss_service.py
 ```
 
-Hoặc sử dụng curl:
+#### 3.4 Chạy script ghi event log sử dụng Ed25519
 
 ```bash
-curl -X POST http://localhost/v1/auth/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin&password=admin123"
+python log_ed25519_service.py
 ```
-
-![JWT Login](./docs/images/jwt-login.png)
-> *Hình 3: Đăng nhập thành công và nhận JWT token*
-
-#### 4.2. Thông tin đăng nhập mặc định
-
-| Username | Password | Vai trò |
-|----------|----------|---------|
-| `admin` | `admin123` | Superadmin |
-
-#### 4.3. Sử dụng token để truy cập API
-
-```bash
-# Xem thông tin user
-curl http://localhost/v1/auth/me \
-  -H "Authorization: Bearer <your-token>"
-
-# Xem danh sách khóa chờ duyệt
-curl http://localhost/v1/admin/keys/pending \
-  -H "Authorization: Bearer <your-token>"
-```
-
-![Admin Endpoints](./docs/images/admin-endpoints.png)
-> *Hình 4: Truy cập các endpoint admin với JWT*
 
 ---
+### 4. Đăng ký và duyệt khóa công khai
 
-### 5. Đăng ký và duyệt khóa công khai
-
-#### 5.1. Tạo cặp khóa RSA
+#### 4.1. Tạo cặp khóa RSA
 
 ```bash
 python scripts/generate_rsa_keys.py
 ```
 
-#### 5.2. Đăng ký khóa công khai
+#### 4.2. Đăng ký khóa công khai
 
 ```bash
 python scripts/register_key.py --algorithm rsa-pkcs1v15-vulnerable
 ```
 
-![Key Registration](./docs/images/key-registration.png)
-> *Hình 5: Đăng ký khóa công khai*
+<img width="525" height="672" alt="image" src="https://github.com/user-attachments/assets/52fb92f1-efa2-40c4-88e4-8c2e3189782f" />
 
-#### 5.3. Duyệt khóa (Admin)
+> *Hình 4.1: Đăng ký khóa công khai*
+
+#### 4.3. Duyệt khóa (Admin)
 
 ```bash
 # Xem danh sách khóa chờ duyệt
@@ -171,9 +159,11 @@ curl -X POST http://localhost/v1/admin/keys/review \
 ```bash
 python scripts/send_audit_event.py
 ```
+hoặc sử dụng ui
 
-![Send Audit Event](./docs/images/send-audit-event.png)
-> *Hình 6: Gửi audit event với chữ ký số*
+<img width="526" height="662" alt="image" src="https://github.com/user-attachments/assets/d88c865c-e67b-4001-a7ac-b0369a48acd6" />
+
+> *Hình 4.2: Giao diện gửi audit event với chữ ký số*
 
 #### 6.2. Xem danh sách events
 
@@ -195,9 +185,6 @@ curl "http://localhost/v1/logs?limit=10"
 
 Sau khi đăng nhập, vào **Dashboards** > **Audit Log Service**
 
-![Grafana Dashboard](./docs/images/grafana-dashboard.png)
-> *Hình 7: Dashboard giám sát hệ thống*
-
 ---
 
 ### 8. Sử dụng với Burp Suite (Penetration Testing)
@@ -208,26 +195,6 @@ Hệ thống hỗ trợ proxy qua Burp Suite để phân tích traffic:
 # Chạy script với proxy Burp Suite
 python scripts/test_secure_vs_vulnerable.py --proxy http://127.0.0.1:8080
 ```
-
-![Burp Suite Capture](./docs/images/burp-suite.png)
-> *Hình 8: Capture traffic với Burp Suite*
-
----
-
-## 📸 Hình ảnh Demo
-
-> **Hướng dẫn thêm hình ảnh:**
-> 1. Tạo thư mục `docs/images/` trong project
-> 2. Chụp màn hình kết quả demo
-> 3. Lưu với tên file tương ứng:
->    - `docker-services.png` - Docker containers đang chạy
->    - `rsa-attack-demo.png` - Kết quả demo tấn công RSA
->    - `jwt-login.png` - Đăng nhập JWT thành công
->    - `admin-endpoints.png` - Truy cập admin API
->    - `key-registration.png` - Đăng ký khóa
->    - `send-audit-event.png` - Gửi audit event
->    - `grafana-dashboard.png` - Grafana dashboard
->    - `burp-suite.png` - Burp Suite capture
 
 ---
 
@@ -240,14 +207,6 @@ python scripts/test_secure_vs_vulnerable.py --proxy http://127.0.0.1:8080
 | `docker compose logs -f api` | Xem logs của API |
 | `docker compose build api` | Build lại API sau khi sửa code |
 | `docker compose restart api` | Khởi động lại API |
-
----
-
-## 📚 Tài liệu tham khảo
-
-1. Bleichenbacher, D. (1998). "Chosen Ciphertext Attacks Against Protocols Based on the RSA Encryption Standard PKCS #1"
-2. RFC 8017 - PKCS #1: RSA Cryptography Specifications Version 2.2
-3. CVE-2006-4339 - OpenSSL RSA Signature Forgery Vulnerability
 
 ---
 
