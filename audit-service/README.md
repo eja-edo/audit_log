@@ -1,313 +1,256 @@
-# Audit Log Service
+# Hệ thống Audit Log với Demo Tấn công RSA PKCS#1 v1.5
 
-**A cost-optimized, production-ready audit logging system with cryptographic integrity.**
+**Đồ án môn học: An toàn và Bảo mật Thông tin**
 
-## 🎯 Overview
+---
 
-This audit log service provides a secure, tamper-evident logging system using:
-- **PostgreSQL** as the single source of truth (no Kafka, S3, or Elasticsearch needed)
-- **FastAPI** for high-performance API handling
-- **Ed25519/RSA-PSS** digital signatures for event integrity
-- **Hash chaining** for tamper detection (blockchain-like)
-- **PostgreSQL LISTEN/NOTIFY** for async processing
+## 👥 Danh sách thành viên nhóm
 
-## 📋 Features
+| STT | Họ và Tên | MSSV | Email | Vai trò |
+|-----|-----------|------|-------|---------|
+| 1 | [Vũ Nguyễn Duy Anh] | [22810310266] | [dauyanhsadg@gmail.com] | Nhóm trưởng |
+| 2 | [Trịnh Thị Thu Huyền] | [22810310234] | [email2@example.com] | Thành viên |
+| 3 | [Nguyễn Nhật Quang] | [22810310087] | [email3@example.com] | Thành viên |
 
-### Security
-- ✅ Cryptographic signatures on all events
-- ✅ Hash chaining for tamper detection
-- ✅ mTLS authentication for publishers
-- ✅ Append-only audit trail (no UPDATE/DELETE)
-- ✅ Key rotation support
+---
 
-### Performance
-- ✅ Partitioned tables for fast queries
-- ✅ Connection pooling with asyncpg
-- ✅ Full-text search with PostgreSQL FTS
-- ✅ Materialized views for analytics
+## 📋 Phân chia công việc
 
-### Operations
-- ✅ Prometheus metrics
-- ✅ Grafana dashboards
-- ✅ Health checks (liveness/readiness)
-- ✅ Docker Compose deployment
+| Thành viên | Công việc phụ trách | Tiến độ |
+|------------|---------------------|---------|
+| [Nhật Quang] | - Xây dựng module xác thực JWT<br>-Nghiên cứu RSA-PSS<br>- Tích hợp database PostgreSQL | ✅ Hoàn thành |
+| [Duy Anh] | - Thiết kế kiến trúc hệ thống<br>- Nghiên cứu lỗ hổng RSA PKCS#1 v1.5<br>- Xây dựng demo tấn công Bleichenbacher<br>- Viết script demo so sánh | ✅ Hoàn thành |
+| [Thu Huyền] | - Xây dựng API FastAPI<br>- Thiết kế database schema<br>-Nghiên cứu Ed22519<br>- Xây dựng module quản lý khóa | ✅ Hoàn thành |
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
-- Docker & Docker Compose
-- OpenSSL (for certificate generation)
+## 📖 Hướng dẫn sử dụng
 
-### 1. Clone and Configure
+### 1. Yêu cầu hệ thống
+
+- **Docker Desktop** (Windows/Mac) hoặc Docker Engine (Linux)
+- **Docker Compose** v2.0+
+- **Python 3.10+** (để chạy các script demo)
+- **Git** (để clone repository)
+
+### 2. Cài đặt và khởi chạy
+
+#### Bước 1: Clone repository
 
 ```bash
-# Copy environment file
-cp .env.example .env
-
-# Edit configuration
-nano .env
+git clone <repository-url>
+cd audit-service
 ```
 
-### 2. Generate Certificates (for mTLS)
+#### Bước 2: Khởi động các services
 
 ```bash
-# Create certificates directory
-mkdir -p certs keys
-
-# Generate CA
-openssl genrsa -out certs/ca.key 4096
-openssl req -new -x509 -days 3650 -key certs/ca.key -out certs/ca.crt \
-    -subj "/CN=Audit Log CA"
-
-# Generate server certificate
-openssl genrsa -out certs/server.key 2048
-openssl req -new -key certs/server.key -out certs/server.csr \
-    -subj "/CN=audit.example.com"
-openssl x509 -req -days 365 -in certs/server.csr \
-    -CA certs/ca.crt -CAkey certs/ca.key -CAcreateserial \
-    -out certs/server.crt
-
-# Generate master key
-openssl rand -base64 32 > keys/master.key
+docker compose up -d
 ```
 
-### 3. Start Services
+Đợi khoảng 30 giây để các services khởi động hoàn tất.
+
+#### Bước 3: Kiểm tra trạng thái
 
 ```bash
-# Start all services
-docker-compose up -d
-
-# With Meilisearch for advanced search
-docker-compose --profile with-search up -d
+docker compose ps
 ```
 
-### 4. Verify Installation
+Kết quả mong đợi: tất cả services ở trạng thái `running`.
+
+![Docker Services Running](./docs/images/docker-services.png)
+> *Hình 1: Các services đang chạy*
+
+---
+
+### 3. Demo tấn công RSA PKCS#1 v1.5
+
+#### 3.1. Chạy script so sánh Secure vs Vulnerable
 
 ```bash
-# Check health
-curl http://localhost:8000/health
-
-# View logs
-docker-compose logs -f api
-```
-
-## 📖 API Usage
-
-### Register a Public Key
-
-```bash
-curl -X POST http://localhost:8000/v1/admin/keys \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Token: your-admin-token" \
-  -d '{
-    "service_id": "my-service",
-    "public_key_pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----",
-    "algorithm": "ed25519"
-  }'
-```
-
-### Submit an Audit Event
-
-```python
-import base64
-import json
-import httpx
-from nacl.signing import SigningKey
-
-# Generate or load your signing key
-signing_key = SigningKey.generate()
-
-# Create event
-event_data = {
-    "actor": "user@example.com",
-    "action": "LOGIN",
-    "timestamp": "2025-01-01T00:00:00Z"
-}
-
-# Canonicalize (sorted keys, no whitespace)
-canonical = json.dumps(event_data, sort_keys=True, separators=(',', ':'))
-
-# Sign
-signature = signing_key.sign(canonical.encode()).signature
-
-# Submit
-response = httpx.post(
-    "https://audit.example.com/v1/logs",
-    json={
-        "service_id": "my-service",
-        "event_type": "USER_LOGIN",
-        "event": canonical,
-        "event_data": event_data,
-        "signature": base64.b64encode(signature).decode(),
-        "public_key_id": "my-service:v1"
-    },
-    cert=("client.crt", "client.key"),
-    verify="ca.crt"
-)
-```
-
-### Query Events
-
-```bash
-# List events
-curl "http://localhost:8000/v1/logs?service_id=my-service&limit=10"
-
-# Search events
-curl -X POST "http://localhost:8000/v1/logs/search" \
-  -H "Content-Type: application/json" \
-  -d '{"search_text": "fraud", "limit": 100}'
-```
-
-### Verify Chain Integrity
-
-```bash
-curl -X POST "http://localhost:8000/v1/admin/verify-chain?service_id=my-service" \
-  -H "X-Admin-Token: your-admin-token"
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Publishers    │────▶│  Nginx (mTLS)   │────▶│   FastAPI API   │
-│  (Services)     │     │  Rate Limiting  │     │  Verification   │
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-                                                         │
-                        ┌────────────────────────────────┼────────────────────────────────┐
-                        │                                ▼                                │
-                        │  ┌─────────────────────────────────────────────────────────┐   │
-                        │  │                    PostgreSQL                            │   │
-                        │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │   │
-                        │  │  │audit_events │  │key_registry │  │chain_state  │      │   │
-                        │  │  │(partitioned)│  │             │  │             │      │   │
-                        │  │  └─────────────┘  └─────────────┘  └─────────────┘      │   │
-                        │  │                                                          │   │
-                        │  │  LISTEN/NOTIFY ─────────────────────────────────────────│   │
-                        │  └─────────────────────────────────────────────────────────┘   │
-                        │                                │                                │
-                        └────────────────────────────────┼────────────────────────────────┘
-                                                         ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │ Event Consumer  │     │   Meilisearch   │
-                        │ (Async Worker)  │────▶│   (Optional)    │
-                        └─────────────────┘     └─────────────────┘
-```
-
-## 📊 Monitoring
-
-### Prometheus Metrics
-
-Available at `/metrics`:
-- `audit_events_received_total` - Events received by service
-- `audit_events_rejected_total` - Events rejected by reason
-- `signature_verification_seconds` - Verification latency
-- `db_write_seconds` - Database write latency
-
-### Grafana Dashboards
-
-Access Grafana at http://localhost:3000 (default: admin/admin)
-
-Pre-configured dashboards:
-- **Audit Log Service** - Main operational dashboard
-- Event ingestion rate
-- Rejection rates
-- Latency percentiles
-
-## 🔐 Security
-
-### Authentication
-- Publishers authenticate via mTLS client certificates
-- Admin endpoints require X-Admin-Token header
-
-### Signatures
-- Ed25519 (recommended) - 64-byte signatures
-- RSA-PSS (2048+ bits) - For legacy systems
-
-### Key Rotation
-
-```bash
-curl -X POST http://localhost:8000/v1/admin/keys/rotate \
-  -H "X-Admin-Token: your-admin-token" \
-  -d '{
-    "service_id": "my-service",
-    "new_public_key_pem": "...",
-    "algorithm": "ed25519"
-  }'
-```
-
-## 📁 Project Structure
-
-```
-audit-service/
-├── app/
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration
-│   ├── database.py          # Database connection
-│   ├── crypto.py            # Cryptographic operations
-│   ├── models.py            # Pydantic models
-│   ├── routers/
-│   │   ├── ingest.py        # POST /v1/logs
-│   │   ├── admin.py         # Admin endpoints
-│   │   └── health.py        # Health checks
-│   └── services/
-│       ├── verifier.py      # Signature verification
-│       ├── processor.py     # Event processing
-│       ├── key_manager.py   # Key management
-│       └── event_consumer.py # Async consumer
-├── sql/
-│   ├── init.sql             # Database schema
-│   └── functions.sql        # Stored procedures
-├── nginx/
-│   └── nginx.conf           # Nginx configuration
-├── monitoring/
-│   ├── prometheus.yml       # Prometheus config
-│   └── grafana/             # Grafana dashboards
-├── tests/
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
-```
-
-## 🧪 Testing
-
-```bash
-# Run tests
+cd scripts
 pip install -r requirements.txt
-pytest tests/ -v
-
-# With coverage
-pytest tests/ --cov=app --cov-report=html
+python test_secure_vs_vulnerable.py
 ```
 
-## 🔧 Configuration
+Script này sẽ demo:
+- ✅ Chữ ký hợp lệ được chấp nhận (cả 2 phiên bản)
+- ✅ Chữ ký giả mạo bị từ chối bởi phiên bản **secure**
+- ❌ Chữ ký giả mạo được chấp nhận bởi phiên bản **vulnerable**
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://...` |
-| `MASTER_KEY_PATH` | Path to master encryption key | `/keys/master.key` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `RATE_LIMIT_REQUESTS` | Requests per minute | `1000` |
-| `MEILISEARCH_URL` | Optional search URL | `null` |
+![RSA Attack Demo](./docs/images/rsa-attack-demo.png)
+> *Hình 2: Kết quả demo tấn công RSA PKCS#1 v1.5*
 
-## 📈 Scaling
+#### 3.2. Giải thích kết quả
 
-### Horizontal Scaling
-- Increase `api` replicas in docker-compose
-- Use external PostgreSQL with connection pooling (PgBouncer)
+| Thuật toán | Chữ ký hợp lệ | Chữ ký giả mạo |
+|------------|---------------|----------------|
+| `rsa-pkcs1v15` (Secure) | ✅ Accepted | ❌ Rejected |
+| `rsa-pkcs1v15-vulnerable` | ✅ Accepted | ⚠️ **Accepted (LỖ HỔNG!)** |
 
-### Data Retention
-```sql
--- Keep 24 months of data
-SELECT * FROM drop_old_partitions(24);
+---
+
+### 4. Xác thực Admin với JWT
+
+#### 4.1. Đăng nhập lấy token
+
+```bash
+python scripts/admin_auth.py
 ```
 
-## 🤝 Contributing
+Hoặc sử dụng curl:
 
-1. Fork the repository
-2. Create a feature branch
-3. Run tests: `pytest tests/`
-4. Submit a pull request
+```bash
+curl -X POST http://localhost/v1/auth/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin123"
+```
 
-## 📄 License
+![JWT Login](./docs/images/jwt-login.png)
+> *Hình 3: Đăng nhập thành công và nhận JWT token*
 
-MIT License - see LICENSE file for details.
+#### 4.2. Thông tin đăng nhập mặc định
+
+| Username | Password | Vai trò |
+|----------|----------|---------|
+| `admin` | `admin123` | Superadmin |
+
+#### 4.3. Sử dụng token để truy cập API
+
+```bash
+# Xem thông tin user
+curl http://localhost/v1/auth/me \
+  -H "Authorization: Bearer <your-token>"
+
+# Xem danh sách khóa chờ duyệt
+curl http://localhost/v1/admin/keys/pending \
+  -H "Authorization: Bearer <your-token>"
+```
+
+![Admin Endpoints](./docs/images/admin-endpoints.png)
+> *Hình 4: Truy cập các endpoint admin với JWT*
+
+---
+
+### 5. Đăng ký và duyệt khóa công khai
+
+#### 5.1. Tạo cặp khóa RSA
+
+```bash
+python scripts/generate_rsa_keys.py
+```
+
+#### 5.2. Đăng ký khóa công khai
+
+```bash
+python scripts/register_key.py --algorithm rsa-pkcs1v15-vulnerable
+```
+
+![Key Registration](./docs/images/key-registration.png)
+> *Hình 5: Đăng ký khóa công khai*
+
+#### 5.3. Duyệt khóa (Admin)
+
+```bash
+# Xem danh sách khóa chờ duyệt
+python scripts/admin_auth.py
+
+# Duyệt khóa qua API
+curl -X POST http://localhost/v1/admin/keys/review \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"key_id": "<key-id>", "action": "approve"}'
+```
+
+---
+
+### 6. Gửi và xác minh Audit Event
+
+#### 6.1. Gửi event với chữ ký
+
+```bash
+python scripts/send_audit_event.py
+```
+
+![Send Audit Event](./docs/images/send-audit-event.png)
+> *Hình 6: Gửi audit event với chữ ký số*
+
+#### 6.2. Xem danh sách events
+
+```bash
+curl "http://localhost/v1/logs?limit=10"
+```
+
+---
+
+### 7. Monitoring với Grafana
+
+#### 7.1. Truy cập Grafana
+
+- **URL:** http://localhost:3000
+- **Username:** admin
+- **Password:** admin
+
+#### 7.2. Xem Dashboard
+
+Sau khi đăng nhập, vào **Dashboards** > **Audit Log Service**
+
+![Grafana Dashboard](./docs/images/grafana-dashboard.png)
+> *Hình 7: Dashboard giám sát hệ thống*
+
+---
+
+### 8. Sử dụng với Burp Suite (Penetration Testing)
+
+Hệ thống hỗ trợ proxy qua Burp Suite để phân tích traffic:
+
+```bash
+# Chạy script với proxy Burp Suite
+python scripts/test_secure_vs_vulnerable.py --proxy http://127.0.0.1:8080
+```
+
+![Burp Suite Capture](./docs/images/burp-suite.png)
+> *Hình 8: Capture traffic với Burp Suite*
+
+---
+
+## 📸 Hình ảnh Demo
+
+> **Hướng dẫn thêm hình ảnh:**
+> 1. Tạo thư mục `docs/images/` trong project
+> 2. Chụp màn hình kết quả demo
+> 3. Lưu với tên file tương ứng:
+>    - `docker-services.png` - Docker containers đang chạy
+>    - `rsa-attack-demo.png` - Kết quả demo tấn công RSA
+>    - `jwt-login.png` - Đăng nhập JWT thành công
+>    - `admin-endpoints.png` - Truy cập admin API
+>    - `key-registration.png` - Đăng ký khóa
+>    - `send-audit-event.png` - Gửi audit event
+>    - `grafana-dashboard.png` - Grafana dashboard
+>    - `burp-suite.png` - Burp Suite capture
+
+---
+
+## 🔧 Các lệnh hữu ích
+
+| Lệnh | Mô tả |
+|------|-------|
+| `docker compose up -d` | Khởi động tất cả services |
+| `docker compose down` | Dừng tất cả services |
+| `docker compose logs -f api` | Xem logs của API |
+| `docker compose build api` | Build lại API sau khi sửa code |
+| `docker compose restart api` | Khởi động lại API |
+
+---
+
+## 📚 Tài liệu tham khảo
+
+1. Bleichenbacher, D. (1998). "Chosen Ciphertext Attacks Against Protocols Based on the RSA Encryption Standard PKCS #1"
+2. RFC 8017 - PKCS #1: RSA Cryptography Specifications Version 2.2
+3. CVE-2006-4339 - OpenSSL RSA Signature Forgery Vulnerability
+
+---
+
+## 📄 Giấy phép
+
+Đồ án phục vụ mục đích học tập và nghiên cứu.
