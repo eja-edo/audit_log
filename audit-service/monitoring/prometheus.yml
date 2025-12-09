@@ -1,0 +1,62 @@
+# Prometheus Configuration for Audit Log Service
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'audit-log-cluster'
+    env: 'production'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load alerting rules
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ===========================================================================
+  # Prometheus self-monitoring
+  # ===========================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+
+  # ===========================================================================
+  # Audit Log API Service
+  # ===========================================================================
+  - job_name: 'audit-api'
+    static_configs:
+      - targets: ['api:8000']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ===========================================================================
+  # PostgreSQL Exporter
+  # ===========================================================================
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # ===========================================================================
+  # Nginx (requires nginx-prometheus-exporter or nginx stub_status)
+  # ===========================================================================
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['nginx:9113']
+
+  # ===========================================================================
+  # Docker containers (if using cAdvisor)
+  # ===========================================================================
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']

@@ -1,0 +1,176 @@
+# Prometheus Alerting Rules for Audit Log Service
+
+groups:
+  # ===========================================================================
+  # API Health Alerts
+  # ===========================================================================
+  - name: audit_api_alerts
+    rules:
+      - alert: AuditAPIDown
+        expr: up{job="audit-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Audit API is down"
+          description: "Audit API instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighRejectionRate
+        expr: |
+          rate(audit_events_rejected_total[5m]) 
+          / 
+          (rate(audit_events_received_total[5m]) + 0.001) 
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High event rejection rate"
+          description: "More than 10% of events are being rejected over the last 5 minutes."
+
+      - alert: HighRejectionRateCritical
+        expr: |
+          rate(audit_events_rejected_total[5m]) 
+          / 
+          (rate(audit_events_received_total[5m]) + 0.001) 
+          > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical event rejection rate"
+          description: "More than 50% of events are being rejected. Possible attack or misconfiguration."
+
+  # ===========================================================================
+  # Performance Alerts
+  # ===========================================================================
+  - name: audit_performance_alerts
+    rules:
+      - alert: SignatureVerificationSlow
+        expr: histogram_quantile(0.95, rate(signature_verification_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Signature verification is slow"
+          description: "95th percentile signature verification time is above 100ms."
+
+      - alert: DatabaseWriteSlow
+        expr: histogram_quantile(0.95, rate(db_write_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database writes are slow"
+          description: "95th percentile database write time is above 500ms."
+
+      - alert: HighLatencyP99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="audit-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "99th percentile request latency is above 1 second."
+
+  # ===========================================================================
+  # Database Alerts
+  # ===========================================================================
+  - name: audit_database_alerts
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding."
+
+      - alert: HighDatabaseConnections
+        expr: pg_stat_activity_count > 180
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections"
+          description: "Database connections ({{ $value }}) approaching limit (200)."
+
+      - alert: DatabaseConnectionsExhausted
+        expr: pg_stat_activity_count > 195
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connections nearly exhausted"
+          description: "Database connections ({{ $value }}) nearly exhausted."
+
+      - alert: LongRunningQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long running queries detected"
+          description: "Queries running longer than 5 minutes detected."
+
+  # ===========================================================================
+  # Security Alerts
+  # ===========================================================================
+  - name: audit_security_alerts
+    rules:
+      - alert: HighFailedSignatures
+        expr: |
+          sum(rate(audit_events_rejected_total{reason="invalid_signature"}[5m])) by (service_id) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of signature failures"
+          description: "Service {{ $labels.service_id }} has high rate of signature verification failures."
+
+      - alert: SuspiciousActivity
+        expr: |
+          sum(rate(audit_events_rejected_total{reason="invalid_signature"}[1h])) by (service_id) > 100
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "Service {{ $labels.service_id }} has had over 100 signature failures in the last hour. Possible attack."
+
+      - alert: UnknownPublicKeyUsed
+        expr: |
+          sum(rate(audit_events_rejected_total{reason="key_not_found"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unknown public keys being used"
+          description: "Requests using unregistered public keys detected."
+
+  # ===========================================================================
+  # Capacity Alerts
+  # ===========================================================================
+  - name: audit_capacity_alerts
+    rules:
+      - alert: HighEventRate
+        expr: rate(audit_events_received_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High event ingestion rate"
+          description: "Event ingestion rate is above 1000 events/second."
+
+      - alert: DiskSpaceRunningLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql/data"} 
+          / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql/data"}) 
+          < 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL disk space running low"
+          description: "Less than 20% disk space remaining for PostgreSQL data."

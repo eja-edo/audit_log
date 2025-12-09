@@ -1,0 +1,241 @@
+# Audit Log Service - Docker Compose Configuration
+# Cost-optimized stack: PostgreSQL + FastAPI + Nginx + Monitoring
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database - Single Source of Truth
+  # ===========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: audit_postgres
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: audit_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_change_me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./sql/functions.sql:/docker-entrypoint-initdb.d/02-functions.sql:ro
+    ports:
+      - "5432:5432"
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "log_statement=ddl"
+      - "-c"
+      - "log_min_duration_statement=1000"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audit_user -d audit_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # FastAPI Application
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://audit_user:${DB_PASSWORD:-secure_password_change_me}@postgres:5432/audit_db
+      MASTER_KEY_PATH: /keys/master.key
+      APP_NAME: "Audit Log Service"
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-my-super-secret-admin-token-2025}
+      MEILISEARCH_URL: ${MEILISEARCH_URL:-}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-}
+    volumes:
+      - ./keys:/keys:ro
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Event Consumer (LISTEN/NOTIFY)
+  # ===========================================================================
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: audit_consumer
+    environment:
+      DATABASE_URL: postgresql://audit_user:${DB_PASSWORD:-secure_password_change_me}@postgres:5432/audit_db
+      MEILISEARCH_URL: ${MEILISEARCH_URL:-http://meilisearch:7700}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    command: ["python", "-m", "app.services.event_consumer"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Nginx - Reverse Proxy & Load Balancer
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: audit_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Prometheus - Metrics Collection
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: audit_prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Grafana - Dashboards & Visualization
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: audit_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Meilisearch - Optional Full-Text Search
+  # ===========================================================================
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: audit_meilisearch
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY:-masterKey123}
+      MEILI_ENV: production
+    volumes:
+      - meilisearch_data:/meili_data
+    ports:
+      - "7700:7700"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - audit_network
+    restart: unless-stopped
+    profiles:
+      - with-search
+
+  # ===========================================================================
+  # PostgreSQL Exporter - Database Metrics
+  # ===========================================================================
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: audit_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://audit_user:${DB_PASSWORD:-secure_password_change_me}@postgres:5432/audit_db?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - audit_network
+    restart: unless-stopped
+
+# ===========================================================================
+# Networks
+# ===========================================================================
+networks:
+  audit_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ===========================================================================
+# Volumes
+# ===========================================================================
+volumes:
+  pgdata:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  meilisearch_data:
+    driver: local

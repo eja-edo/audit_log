@@ -1,0 +1,34 @@
+
+================================================================================
+SERVICE: auth-service
+================================================================================
+Algorithm:      ed25519
+Public Key ID:  auth-service:v1765039019
+Created At:     2025-12-06T16:36:59.055464
+
+--------------------------------------------------------------------------------
+PUBLIC KEY (PEM):
+--------------------------------------------------------------------------------
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA2s7z+czc3/W7MG5e/g9d5LKUUztgop3qQIZCuhbD8IE=
+-----END PUBLIC KEY-----
+
+--------------------------------------------------------------------------------
+PRIVATE KEY:
+--------------------------------------------------------------------------------
+Base64: TvvXrOHA3LoeP4drmyZvWAKi9+lHbPOiI7UT85uATVE=
+
+--------------------------------------------------------------------------------
+USAGE EXAMPLE:
+--------------------------------------------------------------------------------
+Service ID:     auth-service
+Public Key ID:  auth-service:v1765039019
+Algorithm:      ed25519
+
+To submit an event:
+1. Create event_data as JSON
+2. Create canonical form: json.dumps(event_data, sort_keys=True, separators=(',',':'))
+3. Sign canonical form with private key using ed25519
+4. POST to /v1/logs with signature (base64)
+
+================================================================================

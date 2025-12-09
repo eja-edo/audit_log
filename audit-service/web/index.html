@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log Service - Admin Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1>🔐 Audit Log Service</h1>
+            <span class="version">v1.0.0</span>
+        </div>
+        <div class="header-right">
+            <span class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Connecting...</span>
+            </span>
+            <button class="btn btn-icon" id="settingsBtn" title="Settings">⚙️</button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <ul class="nav-list">
+                <li class="nav-item active" data-tab="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </li>
+                <li class="nav-item" data-tab="admin">
+                    <span class="nav-icon">🔑</span>
+                    <span class="nav-text">Admin Tools</span>
+                </li>
+                <li class="nav-item" data-tab="live">
+                    <span class="nav-icon">📡</span>
+                    <span class="nav-text">Live Tail</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <section class="tab-content active" id="dashboard-tab">
+                <!-- Filters -->
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label for="filterServiceId">Service ID</label>
+                        <input type="text" id="filterServiceId" placeholder="All services...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterVerified">Verified</label>
+                        <select id="filterVerified">
+                            <option value="">All</option>
+                            <option value="true">✓ Verified</option>
+                            <option value="false">✗ Not Verified</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterEventType">Event Type</label>
+                        <input type="text" id="filterEventType" placeholder="All types...">
+                    </div>
+                    <div class="filter-group search-group">
+                        <label for="searchQuery">Search</label>
+                        <input type="text" id="searchQuery" placeholder="Search hash or message...">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-primary" id="applyFilters">🔍 Apply</button>
+                        <button class="btn btn-secondary" id="clearFilters">Clear</button>
+                        <button class="btn btn-icon" id="refreshBtn" title="Refresh">🔄</button>
+                    </div>
+                </div>
+
+                <!-- Events Table & Detail Panel -->
+                <div class="content-split">
+                    <!-- Events List -->
+                    <div class="events-panel">
+                        <div class="panel-header">
+                            <h2>Recent Events</h2>
+                            <div class="panel-actions">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="autoRefresh" checked>
+                                    Auto-refresh
+                                </label>
+                                <span class="event-count" id="eventCount">0 events</span>
+                            </div>
+                        </div>
+                        <div class="events-table-container">
+                            <table class="events-table" id="eventsTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Timestamp</th>
+                                        <th>Service</th>
+                                        <th>Type</th>
+                                        <th>Hash</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eventsBody">
+                                    <!-- Events will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="load-more-container">
+                            <button class="btn btn-secondary" id="loadMoreBtn">Load More</button>
+                        </div>
+                    </div>
+
+                    <!-- Event Detail Panel -->
+                    <div class="detail-panel" id="detailPanel">
+                        <div class="panel-header">
+                            <h2>Event Details</h2>
+                            <button class="btn btn-icon close-btn" id="closeDetailBtn">✕</button>
+                        </div>
+                        <div class="detail-content" id="detailContent">
+                            <div class="empty-state">
+                                <span class="empty-icon">📋</span>
+                                <p>Select an event to view details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Tools Tab -->
+            <section class="tab-content" id="admin-tab">
+                <div class="admin-grid">
+                    <!-- Pending Key Approvals -->
+                    <div class="admin-card admin-card-full">
+                        <h3>⏳ Pending Key Approvals</h3>
+                        <p class="card-hint">Services đăng ký key và cần Admin phê duyệt trước khi có thể sử dụng.</p>
+                        <button class="btn btn-primary" id="refreshPendingBtn">🔄 Refresh Pending Keys</button>
+                        <div class="pending-keys-list" id="pendingKeysList">
+                            <div class="empty-state">
+                                <span class="empty-icon">✅</span>
+                                <p>No pending key requests</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Register Key Form (Service self-registration) -->
+                    <div class="admin-card">
+                        <h3>🔑 Request Key Registration</h3>
+                        <p class="card-hint">Service gửi yêu cầu đăng ký key. Key sẽ ở trạng thái pending cho đến khi
+                            Admin phê duyệt.</p>
+                        <form id="registerKeyForm">
+                            <div class="form-group">
+                                <label for="keyServiceId">Service ID</label>
+                                <input type="text" id="keyServiceId" required placeholder="e.g., payment-service">
+                            </div>
+                            <div class="form-group">
+                                <label for="keyAlgorithm">Algorithm</label>
+                                <select id="keyAlgorithm">
+                                    <option value="ed25519">Ed25519 (Recommended)</option>
+                                    <option value="rsa-pss">RSA-PSS</option>
+                                    <option value="rsa-pkcs1v15">RSA PKCS#1 v1.5 (Vulnerable - Demo)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="publicKeyPem">Public Key (PEM)</label>
+                                <textarea id="publicKeyPem" rows="8" required
+                                    placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="keyMetadata">Metadata (JSON, optional)</label>
+                                <textarea id="keyMetadata" rows="3"
+                                    placeholder='{"environment": "production"}'></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">📤 Submit Request</button>
+                        </form>
+                        <div class="response-box" id="registerKeyResponse"></div>
+                    </div>
+
+                    <!-- Insert Test Event Form -->
+                    <div class="admin-card">
+                        <h3>📝 Insert Test Event</h3>
+                        <form id="insertEventForm">
+                            <div class="form-group">
+                                <label for="eventServiceId">Service ID</label>
+                                <input type="text" id="eventServiceId" required placeholder="e.g., payment-service">
+                            </div>
+                            <div class="form-group">
+                                <label for="eventType">Event Type</label>
+                                <input type="text" id="eventType" required placeholder="e.g., USER_LOGIN">
+                            </div>
+                            <div class="form-group">
+                                <label for="eventCanonical">Event Canonical (JSON)</label>
+                                <textarea id="eventCanonical" rows="5" required
+                                    placeholder='{"action":"login","user":"alice"}'></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="eventSignature">Signature (Base64)</label>
+                                <textarea id="eventSignature" rows="3" required
+                                    placeholder="Base64 encoded signature..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="eventPublicKeyId">Public Key ID</label>
+                                <input type="text" id="eventPublicKeyId" required
+                                    placeholder="e.g., payment-service:v1234567890">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Event</button>
+                        </form>
+                        <div class="response-box" id="insertEventResponse"></div>
+                    </div>
+
+                    <!-- Verify Chain -->
+                    <div class="admin-card">
+                        <h3>🔗 Verify Chain Integrity</h3>
+                        <form id="verifyChainForm">
+                            <div class="form-group">
+                                <label for="chainServiceId">Service ID</label>
+                                <input type="text" id="chainServiceId" placeholder="Leave empty for all services">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="chainStartTime">Start Time</label>
+                                    <input type="datetime-local" id="chainStartTime">
+                                </div>
+                                <div class="form-group">
+                                    <label for="chainEndTime">End Time</label>
+                                    <input type="datetime-local" id="chainEndTime">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Verify Chain</button>
+                        </form>
+                        <div class="response-box" id="verifyChainResponse"></div>
+                    </div>
+
+                    <!-- List Keys -->
+                    <div class="admin-card">
+                        <h3>📋 Registered Keys</h3>
+                        <div class="form-group">
+                            <label for="listKeysServiceId">Filter by Service ID</label>
+                            <input type="text" id="listKeysServiceId" placeholder="Leave empty for all">
+                        </div>
+                        <div class="form-group">
+                            <label for="listKeysStatus">Filter by Status</label>
+                            <select id="listKeysStatus">
+                                <option value="">All</option>
+                                <option value="approved">✅ Approved</option>
+                                <option value="pending">⏳ Pending</option>
+                                <option value="rejected">❌ Rejected</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" id="listKeysBtn">List Keys</button>
+                        <div class="keys-list" id="keysList"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live Tail Tab -->
+            <section class="tab-content" id="live-tab">
+                <div class="live-container">
+                    <div class="live-header">
+                        <h2>📡 Live Event Stream</h2>
+                        <div class="live-controls">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="livePaused">
+                                Pause
+                            </label>
+                            <button class="btn btn-secondary" id="clearLiveBtn">Clear</button>
+                            <span class="live-status" id="liveStatus">⚪ Disconnected</span>
+                        </div>
+                    </div>
+                    <div class="live-feed" id="liveFeed">
+                        <div class="empty-state">
+                            <span class="empty-icon">📡</span>
+                            <p>Waiting for events...</p>
+                            <p class="hint">Events will appear here in real-time</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Settings</h3>
+                <button class="btn btn-icon close-btn" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="settingBaseUrl">API Base URL</label>
+                    <input type="text" id="settingBaseUrl" placeholder="http://localhost">
+                </div>
+                <div class="form-group">
+                    <label for="settingAdminToken">Admin Token</label>
+                    <input type="password" id="settingAdminToken" placeholder="Enter admin token">
+                </div>
+                <div class="form-group">
+                    <label for="settingPollInterval">Poll Interval (seconds)</label>
+                    <input type="number" id="settingPollInterval" min="1" max="60" value="5">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="settingUseMock">
+                        Use Mock Data (for testing without backend)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/mock.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
