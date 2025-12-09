@@ -19,24 +19,11 @@ from app.models import (
 from app.database import Database, get_db
 from app.crypto import compute_sha256, compute_chain_hash
 from app.config import settings
+from app.auth import User, get_admin_user_or_token
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
-
-# Admin token security scheme
-admin_token_header = APIKeyHeader(name="X-Admin-Token", auto_error=True)
-
-
-async def verify_admin_token(token: str = Depends(admin_token_header)) -> str:
-    """Verify admin token from header."""
-    if token != settings.admin_token:
-        logger.warning(f"Invalid admin token attempt")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid admin token"
-        )
-    return token
 
 
 # ============================================================================
@@ -45,7 +32,7 @@ async def verify_admin_token(token: str = Depends(admin_token_header)) -> str:
 
 @router.get("/keys/pending")
 async def list_pending_keys(
-    token: str = Depends(verify_admin_token),
+    current_user: User = Depends(get_admin_user_or_token),
     db: Database = Depends(get_db)
 ):
     """
@@ -53,8 +40,7 @@ async def list_pending_keys(
     
     Admin can view all keys awaiting approval.
     
-    **Headers:**
-    - `X-Admin-Token`: Admin authentication token (required)
+    **Authentication:** Bearer token or X-Admin-Token (legacy)
     """
     keys = await db.fetch(
         """
@@ -75,14 +61,13 @@ async def list_pending_keys(
 @router.post("/keys/review", response_model=PublicKeyInfo)
 async def review_key_request(
     request: KeyApprovalRequest,
-    token: str = Depends(verify_admin_token),
+    current_user: User = Depends(get_admin_user_or_token),
     db: Database = Depends(get_db)
 ):
     """
     Approve or reject a pending key registration request.
     
-    **Headers:**
-    - `X-Admin-Token`: Admin authentication token (required)
+    **Authentication:** Bearer token or X-Admin-Token (legacy)
     
     **Request Body:**
     - `public_key_id`: ID of the pending key
@@ -217,7 +202,7 @@ async def review_key_request(
 @router.delete("/keys/{public_key_id}")
 async def disable_key(
     public_key_id: str,
-    token: str = Depends(verify_admin_token),
+    current_user: User = Depends(get_admin_user_or_token),
     db: Database = Depends(get_db)
 ):
     """
@@ -225,6 +210,8 @@ async def disable_key(
     
     Disabled keys can no longer be used for signature verification.
     This is useful for revoking compromised keys.
+    
+    **Authentication:** Bearer token or X-Admin-Token (legacy)
     
     **Note:** Only approved keys can be disabled.
     """
@@ -268,14 +255,13 @@ async def list_keys(
     service_id: Optional[str] = None,
     status: Optional[str] = None,
     include_disabled: bool = False,
-    token: str = Depends(verify_admin_token),
+    current_user: User = Depends(get_admin_user_or_token),
     db: Database = Depends(get_db)
 ):
     """
     List registered public keys.
     
-    **Headers:**
-    - `X-Admin-Token`: Admin authentication token (required)
+    **Authentication:** Bearer token or X-Admin-Token (legacy)
     
     **Query Parameters:**
     - `service_id`: Filter by service
@@ -495,11 +481,13 @@ async def get_service_stats(
 
 @router.post("/refresh-stats-view")
 async def refresh_stats_view(
-    token: str = Depends(verify_admin_token),
+    current_user: User = Depends(get_admin_user_or_token),
     db: Database = Depends(get_db)
 ):
     """
     Manually refresh the statistics materialized view.
+    
+    **Authentication:** Bearer token or X-Admin-Token (legacy)
     """
     await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY event_stats_hourly")
     return {"status": "refreshed"}

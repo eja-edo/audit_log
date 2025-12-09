@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import database
-from app.routers import ingest, admin, health, keys
+from app.routers import ingest, admin, health, keys, auth
 
 # Configure logging
 logging.basicConfig(
@@ -138,6 +138,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ============================================================================
 # Include Routers
 # ============================================================================
+
+# Authentication endpoints (login, token)
+app.include_router(auth.router)
 
 # Event ingestion endpoints
 app.include_router(ingest.router)

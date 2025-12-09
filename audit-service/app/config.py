@@ -50,10 +50,24 @@ class Settings(BaseSettings):
         description="Path to admin signing key"
     )
     
-    # Admin Authentication
+    # Admin Authentication (Legacy - for backward compatibility)
     admin_token: str = Field(
         default="change-me-in-production",
-        description="Admin API token for authentication"
+        description="Admin API token for authentication (legacy, use JWT instead)"
+    )
+    
+    # JWT Authentication
+    jwt_secret_key: str = Field(
+        default="change-me-in-production-use-long-random-string",
+        description="Secret key for JWT token signing"
+    )
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT signing algorithm"
+    )
+    jwt_expire_minutes: int = Field(
+        default=60,
+        description="JWT token expiration time in minutes"
     )
     
     # Rate Limiting
